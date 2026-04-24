@@ -2,11 +2,19 @@ package com.alamgir.sse.entity;
 
 import com.alamgir.sse.dto.enums.ALERT_TYPE;
 import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.LocalDateTime;
-@Entity
 @Table(name = "alerts")
+@Entity
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class Alert {
 
     @Id
@@ -26,9 +34,6 @@ public class Alert {
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
-    // true = broadcast, false = unicast
-    @Column(nullable = false)
-    private boolean broadcast;
 
     @CreationTimestamp
     @Column(nullable = false, updatable = false)
