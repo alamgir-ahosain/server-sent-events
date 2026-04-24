@@ -5,14 +5,15 @@ import com.alamgir.sse.dto.request.AlertCreateRequest;
 import com.alamgir.sse.dto.response.AlertResponse;
 import com.alamgir.sse.entity.Alert;
 import com.alamgir.sse.entity.User;
-import com.alamgir.sse.exception.IllegalStateException;
+import com.alamgir.sse.exception.NotFoundException;
 import com.alamgir.sse.repository.AlertRepository;
 import com.alamgir.sse.repository.UserRepository;
-import com.alamgir.sse.service.Abstraction.UserService;
+import com.alamgir.sse.service.Abstraction.AlertService;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.IOException;
@@ -20,45 +21,58 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.stream.Collectors;
 
 @Service
+@Transactional(readOnly = true)
 @RequiredArgsConstructor
-public class AlertServiceImpl {
+public class AlertServiceImpl implements AlertService {
 
-    Logger logger= LoggerFactory.getLogger(AlertServiceImpl.class);
+    private static final Logger logger = LoggerFactory.getLogger(AlertServiceImpl.class);
 
     private final AlertRepository alertRepository;
     private final UserRepository userRepository;
 
     private final CopyOnWriteArrayList<SseEmitter> emitters = new CopyOnWriteArrayList<>();
-    private final Map<String, List<SseEmitter>> uniCastEmitters = new ConcurrentHashMap<>();
+    private final Map<String, CopyOnWriteArrayList<SseEmitter>> uniCastEmitters = new ConcurrentHashMap<>();
 
 
+    @Override
+    @Transactional
+    public AlertResponse createAlert(AlertCreateRequest request) {
 
-    public AlertResponse createAlert(AlertCreateRequest request){
+        User user = userRepository.findByEmail(request.getEmail()).orElseThrow(() -> new NotFoundException("User not found with email: " + request.getEmail()));
 
-        // Validate user
-        User user=userRepository.findByEmail(request.getUsername()).orElseThrow(() -> new RuntimeException("User not found with email: " + request.getUsername()));
-
-        // Create and save alert
-        Alert alert=Alert.builder()
+        Alert alert = Alert.builder()
                 .type(request.getType())
                 .description(request.getDescription())
                 .user(user)
                 .build();
-        Alert savedAlert=alertRepository.save(alert);
-        logger.info("Alert created successfully: {}", savedAlert.getId());
+
+        Alert savedAlert = alertRepository.save(alert);
+        logger.info("Alert created: id={}, email={}, type={}", savedAlert.getId(), user.getEmail(), savedAlert.getType());
         return mapToResponse(savedAlert);
     }
+
+
+
+    @Override
+    @Transactional
     public void deleteAlert(String id) {
-        Alert Alert = alertRepository.findById(id).orElseThrow(() -> new IllegalStateException("Alert not found with id: " + id));
+        alertRepository.findById(id).orElseThrow(() -> new NotFoundException("Alert not found with id: " + id));
         alertRepository.deleteById(id);
     }
+
+
+
+    @Override
     public AlertResponse getAlertById(String id) {
-        Alert alert = alertRepository.findById(id).orElseThrow(() -> new IllegalStateException("Alert not found with id: " + id));
+        Alert alert = alertRepository.findById(id).orElseThrow(() -> new NotFoundException("Alert not found with id: " + id));
         return mapToResponse(alert);
     }
+
+
+
+    @Override
     public List<AlertResponse> getAllAlerts() {
         return alertRepository.findAll()
                 .stream()
@@ -67,40 +81,56 @@ public class AlertServiceImpl {
     }
 
 
-    public SseEmitter subscribeClient(String userName) {
+
+    @Override
+    public SseEmitter subscribeClient(String email) {
         SseEmitter emitter = new SseEmitter(0L);
 
-        uniCastEmitters.computeIfAbsent(userName, key -> new CopyOnWriteArrayList<>()).add(emitter);
+        registerEmitter(email, emitter);
 
-        emitter.onCompletion(() -> removeUserEmitter(userName, emitter));
-        emitter.onTimeout(() -> removeUserEmitter(userName, emitter));
-        emitter.onError(e -> removeUserEmitter(userName, emitter));
+        emitter.onCompletion(() -> removeEmitter(emitter));
+        emitter.onTimeout(() -> removeEmitter(emitter));
+        emitter.onError(e -> removeEmitter(emitter));
 
         try {
             emitter.send(SseEmitter.event()
                     .name("connected")
-                    .data("SSE connection established for: " + userName)
+                    .data("SSE connection established for: " + email)
                     .reconnectTime(3000));
         } catch (IOException e) {
-            removeUserEmitter(userName, emitter);
+            removeEmitter(emitter);
         }
-
 
         return emitter;
     }
-    private void removeUserEmitter(String userName, SseEmitter emitter) {
-        List<SseEmitter> emittersList = uniCastEmitters.get(userName);
-        if (emittersList != null) {
-            emittersList.remove(emitter);
-            if (emittersList.isEmpty()) uniCastEmitters.remove(userName);
-        }
+
+
+
+
+    private void registerEmitter(String email, SseEmitter emitter) {
+        emitters.addIfAbsent(emitter);
+        uniCastEmitters.computeIfAbsent(email, key -> new CopyOnWriteArrayList<>()).addIfAbsent(emitter);
     }
+
+
+
+    private void removeEmitter(SseEmitter emitter) {
+        emitters.remove(emitter);
+
+        uniCastEmitters.forEach((email, emittersList) -> {
+            emittersList.remove(emitter);
+            if (emittersList.isEmpty()) {
+                uniCastEmitters.remove(email, emittersList);
+            }
+        });
+    }
+
+
+    @Override
+    @Transactional
     public AlertResponse broadcastAlert(AlertCreateRequest request) {
 
-        // 1. Create Alert entity from request
         AlertResponse alertResponse = createAlert(request);
-
-        // 2. Notify all farmers
         for (SseEmitter emitter : emitters) {
             try {
                 emitter.send(SseEmitter.event()
@@ -108,17 +138,23 @@ public class AlertServiceImpl {
                         .data(alertResponse)
                         .id(alertResponse.getId()));
             } catch (IOException e) {
-                emitters.remove(emitter);
+                removeEmitter(emitter);
             }
         }
 
         return alertResponse;
     }
-    public AlertResponse uniCastAlert(String userName, AlertCreateRequest request) {
+
+
+
+
+    @Override
+    @Transactional
+    public AlertResponse uniCastAlert(String email, AlertCreateRequest request) {
 
         AlertResponse response = createAlert(request);
 
-        List<SseEmitter> userEmitters = uniCastEmitters.get(userName);
+        CopyOnWriteArrayList<SseEmitter> userEmitters = uniCastEmitters.get(email);
         if (userEmitters != null) {
             for (SseEmitter emitter : userEmitters) {
                 try {
@@ -127,14 +163,18 @@ public class AlertServiceImpl {
                             .data(response)
                             .id(response.getId()));
                 } catch (IOException e) {
-                    removeUserEmitter(userName, emitter);
+                    removeEmitter(emitter);
                 }
             }
         }
 
         return response;
     }
-    private AlertResponse mapToResponse(Alert alert){
+
+
+
+
+    private AlertResponse mapToResponse(Alert alert) {
         return new AlertResponse(
                 alert.getId(),
                 alert.getUser().getEmail(),

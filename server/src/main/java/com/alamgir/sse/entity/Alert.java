@@ -4,8 +4,10 @@ import com.alamgir.sse.dto.enums.ALERT_TYPE;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
+import lombok.EqualsAndHashCode;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.ToString;
 import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.LocalDateTime;
@@ -28,10 +30,11 @@ public class Alert {
     @Column(nullable = false, length = 500)
     private String description;
 
-    // UNICAST -> target farmer
-    // BROADCAST -> all farmer
+
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "user_id", nullable = false)
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
     private User user;
 
 
