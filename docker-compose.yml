@@ -1,0 +1,40 @@
+services:
+
+
+  server-db:
+    image: postgres:16-alpine
+    container_name: server-db
+    environment:
+      POSTGRES_DB: ${SERVER_DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - '5435:5432'
+    volumes:
+      - server-db-data:/var/lib/postgresql/data
+    networks:
+      - app-network
+
+
+  
+  
+  server-service:
+    build: ./server
+    container_name: server
+    ports:
+      - '8080:8080'
+    env_file:
+      - ./server/.env
+    depends_on:
+      - server-db
+    networks:
+      - app-network
+
+volumes:
+  server-db-data:
+
+
+
+networks:
+  app-network:
+    driver: bridge
