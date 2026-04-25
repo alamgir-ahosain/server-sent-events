@@ -17,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.IOException;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -46,6 +47,7 @@ public class AlertServiceImpl implements AlertService {
                 .type(request.getType())
                 .description(request.getDescription())
                 .user(user)
+                .createdAt(LocalDateTime.now())
                 .build();
 
         Alert savedAlert = alertRepository.save(alert);

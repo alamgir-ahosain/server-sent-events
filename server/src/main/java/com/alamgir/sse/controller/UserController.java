@@ -21,6 +21,10 @@ public class UserController {
     Logger logger= LoggerFactory.getLogger(UserController.class);
     private  final UserService userService;
 
+    @GetMapping("/test")
+    public ResponseEntity<String> test() {
+        return ResponseEntity.ok("UserController is working!");
+    }
     @PostMapping("/register")
     public ResponseEntity<UserResponse> register(@Valid @RequestBody RegistrationRequest request) {
         logger.info("UserController: POST /api/user/register called");

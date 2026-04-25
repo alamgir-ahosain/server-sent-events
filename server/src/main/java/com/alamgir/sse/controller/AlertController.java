@@ -26,6 +26,10 @@ public class AlertController {
 
     private  final AlertService alertService;
 
+    @GetMapping("/test")
+    public ResponseEntity<String> test() {
+        return ResponseEntity.ok("AlertController is working!");
+    }
     @PostMapping("/create")
     public ResponseEntity<AlertResponse> create(@Valid @RequestBody AlertCreateRequest request){
         logger.info("AlertController: POST /api/alert/create called");
