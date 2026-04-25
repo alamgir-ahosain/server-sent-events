@@ -83,6 +83,27 @@ public class AlertServiceImpl implements AlertService {
 
 
     @Override
+    public SseEmitter subscribeClient() {
+        SseEmitter emitter = new SseEmitter(0L);
+
+        emitters.addIfAbsent(emitter);
+
+        emitter.onCompletion(() -> removeEmitter(emitter));
+        emitter.onTimeout(() -> removeEmitter(emitter));
+        emitter.onError(e -> removeEmitter(emitter));
+
+        try {
+            emitter.send(SseEmitter.event()
+                    .name("connected")
+                    .data("SSE connection established for all users")
+                    .reconnectTime(3000));
+        } catch (IOException e) {
+            removeEmitter(emitter);
+        }
+        return emitter;
+    }
+
+    @Override
     public SseEmitter subscribeClient(String email) {
         SseEmitter emitter = new SseEmitter(0L);
 

@@ -14,5 +14,6 @@ public interface AlertService {
     AlertResponse broadcastAlert(AlertCreateRequest request);
     AlertResponse getAlertById(String id);
     List<AlertResponse> getAllAlerts();
+    SseEmitter subscribeClient();
     SseEmitter subscribeClient(String email);
 }

@@ -51,6 +51,11 @@ public class AlertController {
         return ResponseEntity.noContent().build();
     }
 
+    @GetMapping(value = "/subscribe", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter subscribe() {
+        return alertService.subscribeClient();
+    }
+
     // Open SSE stream - browser keeps this connection open
     @GetMapping(value = "/subscribe/{email}", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public ResponseEntity<SseEmitter> subscribe(@PathVariable String email) {
