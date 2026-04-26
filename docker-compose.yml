@@ -1,28 +1,24 @@
 services:
 
-
   server-db:
     image: postgres:16-alpine
     container_name: server-db
     environment:
       POSTGRES_DB: ${SERVER_DB_NAME}
-      POSTGRES_USER: ${DB_USER}
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_USER: ${SERVER_DB_USER}
+      POSTGRES_PASSWORD: ${SERVER_DB_PASSWORD}
     ports:
-      - '5435:5432'
+      - "5435:5432"
     volumes:
       - server-db-data:/var/lib/postgresql/data
     networks:
       - app-network
 
-
-  
-  
-  server-service:
+  server-api:
     build: ./server
-    container_name: server
+    container_name: server-api
     ports:
-      - '8080:8080'
+      - "8080:8080"
     env_file:
       - ./server/.env
     depends_on:
@@ -32,8 +28,6 @@ services:
 
 volumes:
   server-db-data:
-
-
 
 networks:
   app-network:
